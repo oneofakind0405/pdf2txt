@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF 텍스트 추출기</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2rem;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 1.1rem;
+        }
+
+        .upload-section {
+            padding: 40px;
+            text-align: center;
+            border-bottom: 1px solid #eee;
+        }
+
+        .file-input-wrapper {
+            position: relative;
+            display: inline-block;
+            margin-bottom: 20px;
+        }
+
+        .file-input {
+            position: absolute;
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .file-label {
+            display: inline-block;
+            padding: 15px 30px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 50px;
+            cursor: pointer;
+            font-size: 1.1rem;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
+        }
+
+        .file-label:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
+        }
+
+        .file-name {
+            margin-top: 15px;
+            font-size: 1rem;
+            color: #666;
+        }
+
+        .content-section {
+            padding: 40px;
+            min-height: 400px;
+        }
+
+        .page-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 10px;
+        }
+
+        .page-counter {
+            font-weight: 600;
+            color: #495057;
+            font-size: 1.1rem;
+        }
+
+        .copy-btn {
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            box-shadow: 0 3px 10px rgba(17, 153, 142, 0.3);
+        }
+
+        .copy-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 5px 15px rgba(17, 153, 142, 0.4);
+        }
+
+        .copy-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .text-content {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 25px;
+            min-height: 300px;
+            font-size: 1rem;
+            line-height: 1.6;
+            color: #333;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            border: 2px solid #e9ecef;
+            margin-bottom: 20px;
+        }
+
+        .navigation {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .nav-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+            box-shadow: 0 3px 10px rgba(102, 126, 234, 0.3);
+        }
+
+        .nav-btn:hover:not(:disabled) {
+            transform: translateY(-1px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .nav-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .loading {
+            text-align: center;
+            color: #666;
+            font-size: 1.1rem;
+            padding: 50px;
+        }
+
+        .loading::after {
+            content: '';
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-left: 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .no-content {
+            text-align: center;
+            color: #999;
+            font-size: 1.1rem;
+            padding: 50px;
+        }
+
+        .success-message {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            color: white;
+            padding: 15px 25px;
+            border-radius: 25px;
+            font-weight: 600;
+            box-shadow: 0 5px 15px rgba(17, 153, 142, 0.3);
+            transform: translateX(400px);
+            opacity: 0;
+            transition: all 0.3s ease;
+            z-index: 1000;
+        }
+
+        .success-message.show {
+            transform: translateX(0);
+            opacity: 1;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📄 PDF 텍스트 추출기</h1>
+            <p>PDF 파일을 업로드하여 텍스트를 추출하고 페이지별로 확인하세요</p>
+        </div>
+
+        <div class="upload-section">
+            <div class="file-input-wrapper">
+                <input type="file" id="pdfFile" class="file-input" accept=".pdf">
+                <label for="pdfFile" class="file-label">📁 PDF 파일 선택</label>
+            </div>
+            <div class="file-name" id="fileName"></div>
+        </div>
+
+        <div class="content-section">
+            <div id="loadingState" class="loading" style="display: none;">
+                PDF 파일을 처리 중입니다...
+            </div>
+
+            <div id="contentState" style="display: none;">
+                <div class="page-info">
+                    <div class="page-counter" id="pageCounter">페이지 1 / 1</div>
+                    <button class="copy-btn" id="copyBtn" onclick="copyText()">📋 복사</button>
+                </div>
+
+                <div class="text-content" id="textContent"></div>
+
+                <div class="navigation">
+                    <button class="nav-btn" id="prevBtn" onclick="previousPage()" disabled>⬅️ 이전</button>
+                    <button class="nav-btn" id="nextBtn" onclick="nextPage()" disabled>다음 ➡️</button>
+                </div>
+            </div>
+
+            <div id="noContentState" class="no-content">
+                PDF 파일을 선택하여 텍스트를 추출하세요
+            </div>
+        </div>
+    </div>
+
+    <div class="success-message" id="successMessage">
+        텍스트가 클립보드에 복사되었습니다! ✅
+    </div>
+
+    <script>
+        // PDF.js 워커 설정
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+        let pdfDoc = null;
+        let pageTexts = [];
+        let currentPage = 1;
+
+        document.getElementById('pdfFile').addEventListener('change', handleFileSelect);
+
+        async function handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            // 파일명 표시
+            document.getElementById('fileName').textContent = `선택된 파일: ${file.name}`;
+
+            // 로딩 상태 표시
+            showLoadingState();
+
+            try {
+                const arrayBuffer = await file.arrayBuffer();
+                pdfDoc = await pdfjsLib.getDocument(arrayBuffer).promise;
+                
+                // 모든 페이지의 텍스트 추출
+                pageTexts = [];
+                for (let i = 1; i <= pdfDoc.numPages; i++) {
+                    const page = await pdfDoc.getPage(i);
+                    const textContent = await page.getTextContent();
+                    const pageText = textContent.items.map(item => item.str).join(' ');
+                    pageTexts.push(pageText || '이 페이지에는 추출 가능한 텍스트가 없습니다.');
+                }
+
+                // 첫 번째 페이지 표시
+                currentPage = 1;
+                showContentState();
+                updateDisplay();
+
+            } catch (error) {
+                console.error('PDF 처리 중 오류:', error);
+                alert('PDF 파일을 처리하는 중 오류가 발생했습니다.');
+                showNoContentState();
+            }
+        }
+
+        function showLoadingState() {
+            document.getElementById('loadingState').style.display = 'block';
+            document.getElementById('contentState').style.display = 'none';
+            document.getElementById('noContentState').style.display = 'none';
+        }
+
+        function showContentState() {
+            document.getElementById('loadingState').style.display = 'none';
+            document.getElementById('contentState').style.display = 'block';
+            document.getElementById('noContentState').style.display = 'none';
+        }
+
+        function showNoContentState() {
+            document.getElementById('loadingState').style.display = 'none';
+            document.getElementById('contentState').style.display = 'none';
+            document.getElementById('noContentState').style.display = 'block';
+        }
+
+        function updateDisplay() {
+            if (!pdfDoc || pageTexts.length === 0) return;
+
+            // 페이지 카운터 업데이트
+            document.getElementById('pageCounter').textContent = `페이지 ${currentPage} / ${pageTexts.length}`;
+
+            // 텍스트 내용 업데이트
+            document.getElementById('textContent').textContent = pageTexts[currentPage - 1];
+
+            // 네비게이션 버튼 상태 업데이트
+            document.getElementById('prevBtn').disabled = currentPage <= 1;
+            document.getElementById('nextBtn').disabled = currentPage >= pageTexts.length;
+
+            // 복사 버튼 활성화
+            document.getElementById('copyBtn').disabled = false;
+        }
+
+        function previousPage() {
+            if (currentPage > 1) {
+                currentPage--;
+                updateDisplay();
+            }
+        }
+
+        function nextPage() {
+            if (currentPage < pageTexts.length) {
+                currentPage++;
+                updateDisplay();
+            }
+        }
+
+        async function copyText() {
+            const textContent = document.getElementById('textContent').textContent;
+            
+            try {
+                await navigator.clipboard.writeText(textContent);
+                showSuccessMessage();
+            } catch (err) {
+                // 클립보드 API가 지원되지 않는 경우 대체 방법
+                const textArea = document.createElement('textarea');
+                textArea.value = textContent;
+                document.body.appendChild(textArea);
+                textArea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textArea);
+                showSuccessMessage();
+            }
+        }
+
+        function showSuccessMessage() {
+            const message = document.getElementById('successMessage');
+            message.classList.add('show');
+            
+            setTimeout(() => {
+                message.classList.remove('show');
+            }, 3000);
+        }
+
+        // 키보드 단축키 지원
+        document.addEventListener('keydown', function(event) {
+            if (!pdfDoc) return;
+
+            if (event.key === 'ArrowLeft' && currentPage > 1) {
+                previousPage();
+            } else if (event.key === 'ArrowRight' && currentPage < pageTexts.length) {
+                nextPage();
+            } else if (event.ctrlKey && event.key === 'c') {
+                event.preventDefault();
+                copyText();
+            }
+        });
+    </script>
+</body>
+</html>
