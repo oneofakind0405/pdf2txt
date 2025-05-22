@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PDF 텍스트 추출기</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/4.1.1/tesseract.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -234,8 +235,9 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>📄 PDF 텍스트 추출기</h1>
-            <p>PDF 파일을 업로드하여 텍스트를 추출하고 페이지별로 확인하세요</p>
+            <h1>📄 PDF 텍스트 추출기 (OCR 지원)</h1>
+            <p>PDF 파일을 업로드하여 텍스트를 추출하고 페이지별로 확인하세요<br>
+            <small>손글씨, 스캔 문서도 OCR로 인식 가능!</small></p>
         </div>
 
         <div class="upload-section">
@@ -248,7 +250,10 @@
 
         <div class="content-section">
             <div id="loadingState" class="loading" style="display: none;">
-                PDF 파일을 처리 중입니다...
+                <div>PDF 파일을 처리 중입니다...</div>
+                <div style="margin-top: 10px; font-size: 0.9rem; color: #888;">
+                    손글씨나 스캔 문서의 경우 OCR 처리로 시간이 더 걸릴 수 있습니다.
+                </div>
             </div>
 
             <div id="contentState" style="display: none;">
@@ -302,9 +307,18 @@
                 // 모든 페이지의 텍스트 추출
                 pageTexts = [];
                 for (let i = 1; i <= pdfDoc.numPages; i++) {
+                    updateLoadingMessage(`페이지 ${i}/${pdfDoc.numPages} 처리 중...`);
+                    
                     const page = await pdfDoc.getPage(i);
                     const textContent = await page.getTextContent();
-                    const pageText = textContent.items.map(item => item.str).join(' ');
+                    let pageText = textContent.items.map(item => item.str).join(' ').trim();
+                    
+                    // 텍스트가 없거나 매우 적은 경우 OCR 실행
+                    if (!pageText || pageText.length < 50) {
+                        updateLoadingMessage(`페이지 ${i} OCR 처리 중... (시간이 걸릴 수 있습니다)`);
+                        pageText = await performOCR(page);
+                    }
+                    
                     pageTexts.push(pageText || '이 페이지에는 추출 가능한 텍스트가 없습니다.');
                 }
 
@@ -318,6 +332,52 @@
                 alert('PDF 파일을 처리하는 중 오류가 발생했습니다.');
                 showNoContentState();
             }
+        }
+
+        async function performOCR(page) {
+            try {
+                // PDF 페이지를 캔버스로 렌더링
+                const viewport = page.getViewport({ scale: 2.0 });
+                const canvas = document.createElement('canvas');
+                const context = canvas.getContext('2d');
+                canvas.height = viewport.height;
+                canvas.width = viewport.width;
+
+                const renderContext = {
+                    canvasContext: context,
+                    viewport: viewport
+                };
+
+                await page.render(renderContext).promise;
+
+                // OCR 실행
+                const { data: { text } } = await Tesseract.recognize(
+                    canvas,
+                    'kor+eng', // 한국어와 영어 인식
+                    {
+                        logger: m => {
+                            if (m.status === 'recognizing text') {
+                                updateLoadingMessage(`OCR 진행률: ${Math.round(m.progress * 100)}%`);
+                            }
+                        }
+                    }
+                );
+
+                return text.trim();
+            } catch (error) {
+                console.error('OCR 처리 중 오류:', error);
+                return 'OCR 처리 중 오류가 발생했습니다.';
+            }
+        }
+
+        function updateLoadingMessage(message) {
+            const loadingDiv = document.getElementById('loadingState');
+            loadingDiv.innerHTML = `
+                <div>${message}</div>
+                <div style="margin-top: 10px; font-size: 0.9rem; color: #888;">
+                    손글씨나 스캔 문서의 경우 OCR 처리로 시간이 더 걸릴 수 있습니다.
+                </div>
+            `;
         }
 
         function showLoadingState() {
